@@ -25,7 +25,10 @@ import cv2
 import tensorflow as tf
 from tensorflow.contrib.layers import flatten
 
+from keras.datasets import cifar10
+
 from sklearn.utils import shuffle
+from sklearn.model_selection import train_test_split
 
 
 #
@@ -38,8 +41,8 @@ MAX_IMAGE_TRANSLATION   = 2     # Max. +/- image x/y translation in pixels.
 MAX_IMAGE_ROTATION      = 10.0  # Max. +/- image rotation in degrees.
 MAX_IMAGE_INTENSITY_MOD = 50.0  # Max +/- image intensity modification.
 
-# Model parameters: arguments used for tf.truncated_normal in LeNet(),
-# randomly defines variables for the weights and biases for each layer
+# Model parameters: arguments used for tf.truncated_normal() call to
+# initialze weights and biases.
 MU    = 0
 SIGMA = 0.1
 
@@ -547,24 +550,62 @@ def main(name):
     # Init
     log = init(log_file_base, logging.INFO)
 
+#    #
+#    # Load data
+#    #
+#
+#    training_file   = './data/train.p'
+#    validation_file = './data/valid.p'
+#    testing_file    = './data/test.p'
+#
+#    with open(training_file, mode='rb') as f:
+#        train = pickle.load(f)
+#    with open(validation_file, mode='rb') as f:
+#        valid = pickle.load(f)
+#    with open(testing_file, mode='rb') as f:
+#        test = pickle.load(f)
+#
+#    X_train, y_train = train['features'], train['labels']
+#    X_valid, y_valid = valid['features'], valid['labels']
+#    X_test,  y_test  = test['features'],  test['labels']
+#
+#    assert(len(X_train) == len(y_train))
+#    assert(len(X_valid) == len(y_valid))
+#    assert(len(X_test) == len(y_test))
+#
+#    image_shape = X_train[0].shape  # Shape of a traffic sign image?
+#
+#    n_train = len(X_train)  # Number of training examples
+#    n_valid = len(X_valid)  # Number of validation examples
+#    n_test  = len(X_test)   # Number of testing examples
+#
+#    # How many unique classes/labels there are in the dataset.
+#    n_classes = len(np.unique(y_train))
+#
+#    log.info('')
+#    log.info('Image Shape: {}'.format(image_shape))
+#    log.info('')
+#    log.info('Training Set:   {:5} samples'.format(n_train))
+#    log.info('Validation Set: {:5} samples'.format(n_valid))
+#    log.info('Test Set:       {:5} samples'.format(n_test))
+#    log.info('')
+#    log.info('Number of classes = {}'.format(n_classes))
+#    log.info('')
+
     #
-    # Load data
+    # Test model on Cifar10 data (per lab in Lesson 14)
     #
 
-    training_file   = './data/train.p'
-    validation_file = './data/valid.p'
-    testing_file    = './data/test.p'
+    (X_train, y_train), (X_test, y_test) = cifar10.load_data()
+    # y_train.shape is 2d, (50000, 1). While Keras is smart enough to handle this
+    # it's a good idea to flatten the array.
+    y_train = y_train.reshape(-1)
+    y_test = y_test.reshape(-1)
 
-    with open(training_file, mode='rb') as f:
-        train = pickle.load(f)
-    with open(validation_file, mode='rb') as f:
-        valid = pickle.load(f)
-    with open(testing_file, mode='rb') as f:
-        test = pickle.load(f)
+    X_train, X_valid, y_train, y_valid = train_test_split(X_train, y_train, test_size=0.3, random_state=42, stratify = y_train)
 
-    X_train, y_train = train['features'], train['labels']
-    X_valid, y_valid = valid['features'], valid['labels']
-    X_test,  y_test  = test['features'],  test['labels']
+    # Make sure to reset
+    n_classes = len(np.unique(y_train))
 
     assert(len(X_train) == len(y_train))
     assert(len(X_valid) == len(y_valid))
@@ -589,13 +630,15 @@ def main(name):
     log.info('Number of classes = {}'.format(n_classes))
     log.info('')
 
-    #
-    # Visualize the data
-    #
+    # Cifar10 data -> Epoch 25 validation accuracy == 59.6%
 
-    # Load the sign name lookup table.
-    sign_names_file = './data/signnames.csv'
-    sign_names = pd.read_csv(sign_names_file, index_col=['ClassId'])
+#    #
+#    # Visualize the data
+#    #
+#
+#    # Load the sign name lookup table.
+#    sign_names_file = './data/signnames.csv'
+#    sign_names = pd.read_csv(sign_names_file, index_col=['ClassId'])
 #    log.info('Signs:\n{}'.format(sign_names.head(50)))
 #    log.info('sign name[4]=''{}'''.format(sign_names.loc[4][0]))
 
@@ -630,32 +673,35 @@ def main(name):
 #    ax.set_title('Traffic Sign Frequency in Training Dataset')
 #    fig.set_size_inches(16, 8)
 
-#    #
-#    # Preprocess data
-#    #
-#
-#    log.info('Grayscale+normalization for training data ...')
-#    X_train = grayscale_and_normalize(X_train)
-#    log.info('Grayscale+normalization for validation data ...')
-#    X_valid = grayscale_and_normalize(X_valid)
-#    log.info('Grayscale+normalization for test data ...')
-#    X_test  = grayscale_and_normalize(X_test)
-#
-#    log.info('Data augmentation for training data ...')
-#    X_train, y_train = add_modified_images(X_train, y_train, n_classes, 700)
-#    log.info('Data augmentation for validation data ...')
-#    X_valid, y_valid = add_modified_images(X_valid, y_valid, n_classes,  50)
-#    # Do *not* add modified images to the test dataset.
-#
-#    # Shuffle
-#    X_train, y_train = shuffle(X_train, y_train)
-#    X_valid, y_valid = shuffle(X_valid, y_valid)
-#    X_test,  y_test  = shuffle(X_test,  y_test)
-#
-#    #
-#    # Train
-#    #
-#
+    #
+    # Preprocess data
+    #
+
+    log.info('Grayscale+normalization for training data ...')
+    X_train = grayscale_and_normalize(X_train)
+    log.info('Grayscale+normalization for validation data ...')
+    X_valid = grayscale_and_normalize(X_valid)
+    log.info('Grayscale+normalization for test data ...')
+    X_test  = grayscale_and_normalize(X_test)
+
+    log.info('Data augmentation for training data ...')
+    X_train, y_train = add_modified_images(X_train, y_train, n_classes, 700)
+    log.info('Data augmentation for validation data ...')
+    X_valid, y_valid = add_modified_images(X_valid, y_valid, n_classes,  50)
+    # Do *not* add modified images to the test dataset.
+
+    # Shuffle
+    X_train, y_train = shuffle(X_train, y_train)
+    X_valid, y_valid = shuffle(X_valid, y_valid)
+    X_test,  y_test  = shuffle(X_test,  y_test)
+
+    #
+    # Train
+    #
+
+    # !Warning!
+    # Don't reset the graph if loading a saved model.
+    # !Warning!
     tf.reset_default_graph()
 
     # Train the model on the training data.
@@ -674,28 +720,28 @@ def main(name):
     accuracy_operation = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
 #    saver = tf.train.Saver()
-#
-#    with tf.Session() as sess:
-#        sess.run(tf.global_variables_initializer())
-#
-#        log.info('Training...')
-#        log.info('')
-#        num_examples = len(X_train)
-#        for i in range(EPOCHS):
-#            X_train, y_train = shuffle(X_train, y_train)
-#            for offset in range(0, num_examples, BATCH_SIZE):
-#                end = offset + BATCH_SIZE
-#                batch_x, batch_y = X_train[offset:end], y_train[offset:end]
-#                sess.run(training_operation,
-#                         feed_dict={x: batch_x, y: batch_y,
-#                                    keep_prob: DROPOUT_KEEP_PROB})
-#
-#            valid_accuracy = evaluate(X_valid, y_valid,
-#                                      x, y, keep_prob, accuracy_operation)
-#            log.info('EPOCH {} ...'.format(i+1))
-#            log.info('Validation Accuracy = {:.3f}'.format(valid_accuracy))
-#            log.info('')
-#
+
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+
+        log.info('Training...')
+        log.info('')
+        num_examples = len(X_train)
+        for i in range(EPOCHS):
+            X_train, y_train = shuffle(X_train, y_train)
+            for offset in range(0, num_examples, BATCH_SIZE):
+                end = offset + BATCH_SIZE
+                batch_x, batch_y = X_train[offset:end], y_train[offset:end]
+                sess.run(training_operation,
+                         feed_dict={x: batch_x, y: batch_y,
+                                    keep_prob: DROPOUT_KEEP_PROB})
+
+            valid_accuracy = evaluate(X_valid, y_valid,
+                                      x, y, keep_prob, accuracy_operation)
+            log.info('EPOCH {} ...'.format(i+1))
+            log.info('Validation Accuracy = {:.3f}'.format(valid_accuracy))
+            log.info('')
+
 #        saver.save(sess, './lenet')
 #        log.info('Model saved')
 
@@ -708,93 +754,93 @@ def main(name):
 #                                 x, y, keep_prob, accuracy_operation)
 #        log.info("Test Accuracy = {:.3f}".format(test_accuracy))
 #
-    #
-    # Additional test data.
-    #
-
-    # Load additional test images and labels.
-    X_test_2 = []
-    y_test_2 = []
-    image_labels_file = './test_images/image_labels.csv'
-    image_labels = pd.read_csv(image_labels_file, index_col=['ImageId'])
-    for index, row in image_labels.iterrows():
-        image_file = './test_images/image' + str(index).zfill(2) + '.jpg'
-        log.info('image: {}'.format(image_file))
-        image = mpimg.imread(image_file)
-        image = cv2.resize(image, (32, 32))  # Scale to 32x32x3
-        X_test_2.append(image)
-        y_test_2.append(row['ClassId'])
-    X_test_2 = np.array(X_test_2)
-    y_test_2 = np.array(y_test_2)
-
-    # Display
-    label_2_dict = {v: k for v, k in enumerate(y_test_2)}
-
-    fig = plt.figure(figsize=(4, 5))
-    columns = 3
-    rows = 2
-    for index, image in enumerate(X_test_2):
-        class_id = label_2_dict[index]
-        image = image.squeeze()
-        ax = fig.add_subplot(rows, columns, index+1)
-        ax.set_title('ClassId={}'.format(class_id))
-        plt.imshow(image, cmap='gray')
-    fig.subplots_adjust(hspace=.1, wspace=.2)
-    plt.show()
-
-    # Normalize the new test data.
-    X_test_2_normalized = grayscale_and_normalize(X_test_2)
-
-    # Accuracy for each image. The accuracy will be either 0.0 or 1.0.
-    saver = tf.train.Saver()
-    with tf.Session() as sess:
-        saver.restore(sess, tf.train.latest_checkpoint('.'))
-        for offset in range(len(X_test_2_normalized)):
-            end = offset + 1
-            batch_x, batch_y = X_test_2_normalized[offset:end], y_test_2[offset:end]
-            accuracy = sess.run(accuracy_operation,
-                                feed_dict={x: batch_x, y: batch_y, keep_prob: 1.0})
-            log.info("Test Accuracy (image{}) = {:.3f}".format(str(offset).zfill(2), accuracy))
-
-    # Test the model on new test data as a set to get overall accuracy.
-    saver = tf.train.Saver()
-    with tf.Session() as sess:
-        saver.restore(sess, tf.train.latest_checkpoint('.'))
-        test_accuracy = evaluate(X_test_2_normalized, y_test_2,
-                                 x, y, keep_prob, accuracy_operation)
-        log.info("Test Accuracy (2) = {:.3f}".format(test_accuracy))
-
-    # Top five softmax probabilities for additional test data.
-    softmax_logits = tf.nn.softmax(logits)
-    k = 5
-    top_k_op = tf.nn.top_k(softmax_logits, k=k)
-
-    saver = tf.train.Saver()
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        saver.restore(sess, tf.train.latest_checkpoint('.'))
-        top_k = sess.run(top_k_op,
-                         feed_dict={x: X_test_2_normalized, keep_prob: 1.0})
-
-        fig, ax = plt.subplots(len(X_test_2), 1+k, figsize=(12, 8))
-        fig.subplots_adjust(hspace=.4, wspace=.6)
-
-        # top_k[0] == softmax probabilities
-        # top_k[1] == index of the best guess
-        # top_k[:, i, k] == probability/best guess for image i, rank k
-        for i, image in enumerate(X_test_2):
-            ax[i][0].axis('off')
-            ax[i][0].imshow(image)
-            ax[i][0].set_title('Input')
-            for k in range(5):
-                # Use X_valid, y_valid assuming that this dataset contains
-                # at least one instance of each traffic sign class.
-                prob  = 100*top_k[0][i][k]
-                guess = top_k[1][i][k]
-                index = np.argwhere(y_valid == guess)[0]
-                ax[i][k+1].axis('off')
-                ax[i][k+1].imshow(X_valid[index].squeeze(), cmap='gray')
-                ax[i][k+1].set_title('guess: {} ({:.0f}%)'.format(guess, prob))
+#    #
+#    # Additional test data.
+#    #
+#
+#    # Load additional test images and labels.
+#    X_test_2 = []
+#    y_test_2 = []
+#    image_labels_file = './test_images/image_labels.csv'
+#    image_labels = pd.read_csv(image_labels_file, index_col=['ImageId'])
+#    for index, row in image_labels.iterrows():
+#        image_file = './test_images/image' + str(index).zfill(2) + '.jpg'
+#        log.info('image: {}'.format(image_file))
+#        image = mpimg.imread(image_file)
+#        image = cv2.resize(image, (32, 32))  # Scale to 32x32x3
+#        X_test_2.append(image)
+#        y_test_2.append(row['ClassId'])
+#    X_test_2 = np.array(X_test_2)
+#    y_test_2 = np.array(y_test_2)
+#
+#    # Display
+#    label_2_dict = {v: k for v, k in enumerate(y_test_2)}
+#
+#    fig = plt.figure(figsize=(4, 5))
+#    columns = 3
+#    rows = 2
+#    for index, image in enumerate(X_test_2):
+#        class_id = label_2_dict[index]
+#        image = image.squeeze()
+#        ax = fig.add_subplot(rows, columns, index+1)
+#        ax.set_title('ClassId={}'.format(class_id))
+#        plt.imshow(image, cmap='gray')
+#    fig.subplots_adjust(hspace=.1, wspace=.2)
+#    plt.show()
+#
+#    # Normalize the new test data.
+#    X_test_2_normalized = grayscale_and_normalize(X_test_2)
+#
+#    # Accuracy for each image. The accuracy will be either 0.0 or 1.0.
+#    saver = tf.train.Saver()
+#    with tf.Session() as sess:
+#        saver.restore(sess, tf.train.latest_checkpoint('.'))
+#        for offset in range(len(X_test_2_normalized)):
+#            end = offset + 1
+#            batch_x, batch_y = X_test_2_normalized[offset:end], y_test_2[offset:end]
+#            accuracy = sess.run(accuracy_operation,
+#                                feed_dict={x: batch_x, y: batch_y, keep_prob: 1.0})
+#            log.info("Test Accuracy (image{}) = {:.3f}".format(str(offset).zfill(2), accuracy))
+#
+#    # Test the model on new test data as a set to get overall accuracy.
+#    saver = tf.train.Saver()
+#    with tf.Session() as sess:
+#        saver.restore(sess, tf.train.latest_checkpoint('.'))
+#        test_accuracy = evaluate(X_test_2_normalized, y_test_2,
+#                                 x, y, keep_prob, accuracy_operation)
+#        log.info("Test Accuracy (2) = {:.3f}".format(test_accuracy))
+#
+#    # Top five softmax probabilities for additional test data.
+#    softmax_logits = tf.nn.softmax(logits)
+#    k = 5
+#    top_k_op = tf.nn.top_k(softmax_logits, k=k)
+#
+#    saver = tf.train.Saver()
+#    with tf.Session() as sess:
+#        sess.run(tf.global_variables_initializer())
+#        saver.restore(sess, tf.train.latest_checkpoint('.'))
+#        top_k = sess.run(top_k_op,
+#                         feed_dict={x: X_test_2_normalized, keep_prob: 1.0})
+#
+#        fig, ax = plt.subplots(len(X_test_2), 1+k, figsize=(12, 8))
+#        fig.subplots_adjust(hspace=.4, wspace=.6)
+#
+#        # top_k[0] == softmax probabilities
+#        # top_k[1] == index of the best guess
+#        # top_k[:, i, k] == probability/best guess for image i, rank k
+#        for i, image in enumerate(X_test_2):
+#            ax[i][0].axis('off')
+#            ax[i][0].imshow(image)
+#            ax[i][0].set_title('Input')
+#            for k in range(5):
+#                # Use X_valid, y_valid assuming that this dataset contains
+#                # at least one instance of each traffic sign class.
+#                prob  = 100*top_k[0][i][k]
+#                guess = top_k[1][i][k]
+#                index = np.argwhere(y_valid == guess)[0]
+#                ax[i][k+1].axis('off')
+#                ax[i][k+1].imshow(X_valid[index].squeeze(), cmap='gray')
+#                ax[i][k+1].set_title('guess: {} ({:.0f}%)'.format(guess, prob))
 
     # Close the log file.
     for handler in log.handlers[:]:
