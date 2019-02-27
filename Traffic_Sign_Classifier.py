@@ -31,6 +31,15 @@ from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
 
 
+DATA_DIR            = './data'
+MODEL_DIR           = './model'
+VISUAL_DIR          = './visualization'
+# Run option flags.
+TEST_ON_CIFAR10     = False
+DATA_VISUALIZATION  = False
+SAVE_MODEL          = True
+
+
 #
 # Hyperparameters
 #
@@ -541,75 +550,29 @@ def evaluate(X_data, y_data, x, y, keep_prob, accuracy_operation):
     return total_accuracy / num_examples
 
 
-def main(name):
+def load_data(data_dir, log):
+    """
+    Load data for model training and evaluation.
 
-    print('Name: {}'.format(name))
-    head, tail = os.path.split(name)
-    log_file_base, ext = os.path.splitext(tail)
+    Args:
+        data_dir: Directory name where pickle files can be found.
+        log: Log file writer.
 
-    # Init
-    log = init(log_file_base, logging.INFO)
+    Returns:
+        X_train, y_train: Training data
+        X_valid, y_valid: Validation data
+        X_test, y_test: Test data
+        n_classes: Number of output classes.
+    """
+    if TEST_ON_CIFAR10:
+        X_train, y_train, X_valid, y_valid, X_test, y_test = load_cifar10_data()
+    else:
+        X_train, y_train, X_valid, y_valid, X_test, y_test = load_pickle_data(data_dir)
 
-#    #
-#    # Load data
-#    #
-#
-#    training_file   = './data/train.p'
-#    validation_file = './data/valid.p'
-#    testing_file    = './data/test.p'
-#
-#    with open(training_file, mode='rb') as f:
-#        train = pickle.load(f)
-#    with open(validation_file, mode='rb') as f:
-#        valid = pickle.load(f)
-#    with open(testing_file, mode='rb') as f:
-#        test = pickle.load(f)
-#
-#    X_train, y_train = train['features'], train['labels']
-#    X_valid, y_valid = valid['features'], valid['labels']
-#    X_test,  y_test  = test['features'],  test['labels']
-#
-#    assert(len(X_train) == len(y_train))
-#    assert(len(X_valid) == len(y_valid))
-#    assert(len(X_test) == len(y_test))
-#
-#    image_shape = X_train[0].shape  # Shape of a traffic sign image?
-#
-#    n_train = len(X_train)  # Number of training examples
-#    n_valid = len(X_valid)  # Number of validation examples
-#    n_test  = len(X_test)   # Number of testing examples
-#
-#    # How many unique classes/labels there are in the dataset.
-#    n_classes = len(np.unique(y_train))
-#
-#    log.info('')
-#    log.info('Image Shape: {}'.format(image_shape))
-#    log.info('')
-#    log.info('Training Set:   {:5} samples'.format(n_train))
-#    log.info('Validation Set: {:5} samples'.format(n_valid))
-#    log.info('Test Set:       {:5} samples'.format(n_test))
-#    log.info('')
-#    log.info('Number of classes = {}'.format(n_classes))
-#    log.info('')
-
-    #
-    # Test model on Cifar10 data (per lab in Lesson 14)
-    #
-
-    (X_train, y_train), (X_test, y_test) = cifar10.load_data()
-    # y_train.shape is 2d, (50000, 1). While Keras is smart enough to handle this
-    # it's a good idea to flatten the array.
-    y_train = y_train.reshape(-1)
-    y_test = y_test.reshape(-1)
-
-    X_train, X_valid, y_train, y_valid = train_test_split(X_train, y_train, test_size=0.3, random_state=42, stratify = y_train)
-
-    # Make sure to reset
-    n_classes = len(np.unique(y_train))
-
+    # Sanity checks.
     assert(len(X_train) == len(y_train))
     assert(len(X_valid) == len(y_valid))
-    assert(len(X_test) == len(y_test))
+    assert(len(X_test)  == len(y_test))
 
     image_shape = X_train[0].shape  # Shape of a traffic sign image?
 
@@ -630,49 +593,136 @@ def main(name):
     log.info('Number of classes = {}'.format(n_classes))
     log.info('')
 
-    # Cifar10 data -> Epoch 25 validation accuracy == 59.6%
+    return X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes
 
-#    #
-#    # Visualize the data
-#    #
-#
-#    # Load the sign name lookup table.
-#    sign_names_file = './data/signnames.csv'
-#    sign_names = pd.read_csv(sign_names_file, index_col=['ClassId'])
-#    log.info('Signs:\n{}'.format(sign_names.head(50)))
-#    log.info('sign name[4]=''{}'''.format(sign_names.loc[4][0]))
 
-#    # Display a sample of each sign type.
-#    label_dict = {k: v for v, k in enumerate(y_train)}
-#
-#    fig = plt.figure(figsize=(6, 22))
-#    columns = 4
-#    rows = int((n_classes / columns) + 1)
-#    for k in label_dict:
-#        index = label_dict[k]
-#        image = X_train[index].squeeze()
-#        ax = fig.add_subplot(rows, columns, k+1)
-#        ax.set_title('ClassId={}'.format(k))
-#        plt.imshow(image, cmap='gray')
-#    fig.tight_layout()
-#    plt.show()
-#
-#    # Convert the training label data to a DataFrame to make it easier to
-#    # display a histogram using sign names rather than ids.
-#    signs = pd.DataFrame(y_train, columns=['ClassId'])
-#    signs = signs.merge(sign_names, how='inner', on='ClassId')
-#
-#    # Display a histogram of sign names.
-#    fig, ax = plt.subplots()
-#    n, bins, patches = ax.hist(signs['ClassId'].tolist(), bins=n_classes)
-#    plt.setp(ax.xaxis.get_ticklabels(), rotation=70)
-#    ax.set_xticks(sign_names.index)
-#    ax.set_xticklabels(sign_names['SignName'])
-#    ax.set_xlabel('Sign')
-#    ax.set_ylabel('Frequency')
-#    ax.set_title('Traffic Sign Frequency in Training Dataset')
-#    fig.set_size_inches(16, 8)
+def load_cifar10_data():
+    """
+    Load the CIFAR-10 data from keras.
 
+    Args:
+        None
+
+    Returns:
+        X_train, y_train: Training data
+        X_valid, y_valid: Validation data
+        X_test, y_test: Test data
+    """
+    (X_train, y_train), (X_test, y_test) = cifar10.load_data()
+    # y_train.shape is 2d, (50000, 1). While Keras is smart enough to handle this
+    # it's a good idea to flatten the array.
+    y_train = y_train.reshape(-1)
+    y_test  = y_test.reshape(-1)
+
+    X_train, X_valid, y_train, y_valid = train_test_split(X_train, y_train, test_size=0.3, random_state=42, stratify=y_train)
+
+    return X_train, y_train, X_valid, y_valid, X_test, y_test
+
+
+def load_pickle_data(data_dir):
+    """
+    Load data from pickle files in the specified directory.
+
+    Args:
+        data_dir: Directory name where pickle files can be found.
+
+    Returns:
+        X_train, y_train: Training data
+        X_valid, y_valid: Validation data
+        X_test, y_test: Test data
+    """
+    training_file   = os.path.join(data_dir, 'train.p')
+    validation_file = os.path.join(data_dir, 'valid.p')
+    testing_file    = os.path.join(data_dir, 'test.p')
+
+    with open(training_file, mode='rb') as f:
+        train = pickle.load(f)
+    with open(validation_file, mode='rb') as f:
+        valid = pickle.load(f)
+    with open(testing_file, mode='rb') as f:
+        test = pickle.load(f)
+
+    X_train, y_train = train['features'], train['labels']
+    X_valid, y_valid = valid['features'], valid['labels']
+    X_test,  y_test  = test['features'],  test['labels']
+
+    return X_train, y_train, X_valid, y_valid, X_test, y_test
+
+
+def visualize_data(data_dir, X, y, n_classes, output_dir, log):
+    """
+    Data visualization.
+
+    Args:
+        data_dir: Look for the sign names file here.
+        X: Data values.
+        y: Data labels.
+        n_classes: Number of output classes.
+        output_dir: Save visualization plots to this location.
+        log: Log file writer.
+
+    Returns:
+        None
+    """
+
+    # Load the sign name lookup table.
+    sign_names_file = os.path.join(data_dir, 'signnames.csv')
+    sign_names = pd.read_csv(sign_names_file, index_col=['ClassId'])
+    pd.set_option('display.max_colwidth', -1)
+    log.info('Signs:\n{}'.format(sign_names.head(50)))
+    # log.info('sign name[4]=''{}'''.format(sign_names.loc[4][0]))
+
+    # Display a sample of each sign type.
+    label_dict = {k: v for v, k in enumerate(y)}
+
+    fig = plt.figure(figsize=(16, 20))
+    columns = 10
+    rows = int((n_classes / columns) + 1)
+    for k in label_dict:
+        index = label_dict[k]
+        image = X[index].squeeze()
+        ax = fig.add_subplot(rows, columns, k+1)
+        ax.set_title('ClassId={}'.format(k))
+        plt.imshow(image, cmap='gray')
+    fig.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'signs.png'))
+    plt.show()
+
+    # Convert the training label data to a DataFrame to make it easier to
+    # display a histogram using sign names rather than ids.
+    signs = pd.DataFrame(y, columns=['ClassId'])
+    signs = signs.merge(sign_names, how='inner', on='ClassId')
+
+    # Display a histogram of sign names.
+    fig, ax = plt.subplots()
+    # n, bins, patches =
+    ax.hist(signs['ClassId'].tolist(), bins=n_classes)
+    plt.setp(ax.xaxis.get_ticklabels(), rotation=70)
+    ax.set_xticks(sign_names.index)
+    ax.set_xticklabels(sign_names['SignName'])
+    ax.set_xlabel('Sign')
+    ax.set_ylabel('Frequency')
+    ax.set_title('Traffic Sign Frequency in Training Dataset')
+    fig.set_size_inches(18, 10)
+    plt.savefig(os.path.join(output_dir, 'signs_hist.png'))
+    plt.show()
+
+
+def preprocess_and_train(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, model_dir, log):
+    """
+    Preprocess the data (normalization, augmentation) and train the model.
+
+    Args:
+        X_train, y_train: Training data
+        X_valid, y_valid: Validation data
+        X_test, y_test: Test data
+        n_classes: Number of output classes.
+        model_dir: Save the model to this directory.
+        log: Log file writer.
+
+    Returns:
+        None
+    """
     #
     # Preprocess data
     #
@@ -683,17 +733,20 @@ def main(name):
     X_valid = grayscale_and_normalize(X_valid)
     log.info('Grayscale+normalization for test data ...')
     X_test  = grayscale_and_normalize(X_test)
+    log.info('')
 
     log.info('Data augmentation for training data ...')
     X_train, y_train = add_modified_images(X_train, y_train, n_classes, 700)
     log.info('Data augmentation for validation data ...')
     X_valid, y_valid = add_modified_images(X_valid, y_valid, n_classes,  50)
     # Do *not* add modified images to the test dataset.
+    log.info('')
 
     # Shuffle
     X_train, y_train = shuffle(X_train, y_train)
     X_valid, y_valid = shuffle(X_valid, y_valid)
     X_test,  y_test  = shuffle(X_test,  y_test)
+
 
     #
     # Train
@@ -719,8 +772,7 @@ def main(name):
     correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(one_hot_y, 1))
     accuracy_operation = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-#    saver = tf.train.Saver()
-
+    saver = tf.train.Saver()
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
@@ -742,18 +794,39 @@ def main(name):
             log.info('Validation Accuracy = {:.3f}'.format(valid_accuracy))
             log.info('')
 
-#        saver.save(sess, './lenet')
-#        log.info('Model saved')
+        if SAVE_MODEL:
+            saver.save(sess, os.path.join(model_dir, 'lenet'))
+            log.info('Model saved')
 
-#    # Calculate and display accuracy for the model on the test data.
-#    saver = tf.train.Saver()
-#    with tf.Session() as sess:
-#        saver.restore(sess, tf.train.latest_checkpoint('.'))
-#
-#        test_accuracy = evaluate(X_test, y_test,
-#                                 x, y, keep_prob, accuracy_operation)
-#        log.info("Test Accuracy = {:.3f}".format(test_accuracy))
-#
+    # Calculate and display accuracy for the model on the test data.
+    saver = tf.train.Saver()
+    with tf.Session() as sess:
+        saver.restore(sess, tf.train.latest_checkpoint(model_dir))
+
+        test_accuracy = evaluate(X_test, y_test,
+                                 x, y, keep_prob, accuracy_operation)
+        log.info('Test Accuracy = {:.3f}'.format(test_accuracy))
+
+
+def main(name):
+
+    print('Name: {}'.format(name))
+    _, tail = os.path.split(name)
+    log_file_base, _ = os.path.splitext(tail)
+
+    # Init
+    log = init(log_file_base, logging.INFO)
+
+    # Load data
+    X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes = load_data(DATA_DIR, log)
+
+    # Data visualization
+    if DATA_VISUALIZATION:
+        visualize_data(DATA_DIR, X_train, y_train, n_classes, VISUAL_DIR, log)
+
+    # Preprocess data and train the model.
+    preprocess_and_train(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, MODEL_DIR, log)
+
 #    #
 #    # Additional test data.
 #    #
@@ -794,7 +867,7 @@ def main(name):
 #    # Accuracy for each image. The accuracy will be either 0.0 or 1.0.
 #    saver = tf.train.Saver()
 #    with tf.Session() as sess:
-#        saver.restore(sess, tf.train.latest_checkpoint('.'))
+#        saver.restore(sess, tf.train.latest_checkpoint('./model'))
 #        for offset in range(len(X_test_2_normalized)):
 #            end = offset + 1
 #            batch_x, batch_y = X_test_2_normalized[offset:end], y_test_2[offset:end]
@@ -805,7 +878,7 @@ def main(name):
 #    # Test the model on new test data as a set to get overall accuracy.
 #    saver = tf.train.Saver()
 #    with tf.Session() as sess:
-#        saver.restore(sess, tf.train.latest_checkpoint('.'))
+#        saver.restore(sess, tf.train.latest_checkpoint('./model'))
 #        test_accuracy = evaluate(X_test_2_normalized, y_test_2,
 #                                 x, y, keep_prob, accuracy_operation)
 #        log.info("Test Accuracy (2) = {:.3f}".format(test_accuracy))
@@ -818,7 +891,7 @@ def main(name):
 #    saver = tf.train.Saver()
 #    with tf.Session() as sess:
 #        sess.run(tf.global_variables_initializer())
-#        saver.restore(sess, tf.train.latest_checkpoint('.'))
+#        saver.restore(sess, tf.train.latest_checkpoint('./model'))
 #        top_k = sess.run(top_k_op,
 #                         feed_dict={x: X_test_2_normalized, keep_prob: 1.0})
 #
