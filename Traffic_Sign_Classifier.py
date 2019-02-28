@@ -708,25 +708,22 @@ def visualize_data(data_dir, X, y, n_classes, output_dir, log):
     plt.show()
 
 
-def preprocess_and_train(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, model_dir, log):
+def preprocess_data(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, log):
     """
-    Preprocess the data (normalization, augmentation) and train the model.
+    Preprocess the data: normalization and augmentation.
 
     Args:
         X_train, y_train: Training data
         X_valid, y_valid: Validation data
         X_test, y_test: Test data
         n_classes: Number of output classes.
-        model_dir: Save the model to this directory.
         log: Log file writer.
 
     Returns:
-        None
+        X_train, y_train: Training data
+        X_valid, y_valid: Validation data
+        X_test, y_test: Test data
     """
-    #
-    # Preprocess data
-    #
-
     log.info('Grayscale+normalization for training data ...')
     X_train = grayscale_and_normalize(X_train)
     log.info('Grayscale+normalization for validation data ...')
@@ -747,11 +744,24 @@ def preprocess_and_train(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
     X_valid, y_valid = shuffle(X_valid, y_valid)
     X_test,  y_test  = shuffle(X_test,  y_test)
 
+    return X_train, y_train, X_valid, y_valid, X_test, y_test
 
-    #
-    # Train
-    #
 
+def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, model_dir, log):
+    """
+    Train the model and save it to a file.
+
+    Args:
+        X_train, y_train: Training data
+        X_valid, y_valid: Validation data
+        X_test, y_test: Test data
+        n_classes: Number of output classes.
+        model_dir: Save the model to this directory.
+        log: Log file writer.
+
+    Returns:
+        None
+    """
     # !Warning!
     # Don't reset the graph if loading a saved model.
     # !Warning!
@@ -761,9 +771,10 @@ def preprocess_and_train(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
     x = tf.placeholder(tf.float32, (None, 32, 32, 1))
     y = tf.placeholder(tf.int32, (None))
     keep_prob = tf.placeholder(tf.float32)  # Keep probability for dropout.
-    one_hot_y = tf.one_hot(y, n_classes)
+    one_hot_y = tf.stop_gradient(tf.one_hot(y, n_classes))
 
     logits             = LeNet(x, n_classes, keep_prob, log)
+    # https://stats.stackexchange.com/questions/327348/how-is-softmax-cross-entropy-with-logits-different-from-softmax-cross-entropy-wi
     cross_entropy      = tf.nn.softmax_cross_entropy_with_logits_v2(labels=one_hot_y, logits=logits)
     loss_operation     = tf.reduce_mean(cross_entropy)
     optimizer          = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE)
@@ -824,8 +835,15 @@ def main(name):
     if DATA_VISUALIZATION:
         visualize_data(DATA_DIR, X_train, y_train, n_classes, VISUAL_DIR, log)
 
-    # Preprocess data and train the model.
-    preprocess_and_train(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, MODEL_DIR, log)
+    # Disable TensorFlow warnings.
+    tf.logging.set_verbosity(tf.logging.ERROR)
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # {'0', '1', '2', '3'}
+
+    # Preprocess data.
+    X_train, y_train, X_valid, y_valid, X_test, y_test = preprocess_data(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, log)
+
+    # Train the model.
+    train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, MODEL_DIR, log)
 
 #    #
 #    # Additional test data.
