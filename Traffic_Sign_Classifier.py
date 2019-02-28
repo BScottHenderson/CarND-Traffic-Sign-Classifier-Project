@@ -33,11 +33,15 @@ from sklearn.model_selection import train_test_split
 
 DATA_DIR            = './data'
 MODEL_DIR           = './model'
+MODEL_NAME          = 'lenet'
 VISUAL_DIR          = './visualization'
+TEST_IMAGE_DIR      = './test_images'
+
 # Run option flags.
 TEST_ON_CIFAR10     = False
 DATA_VISUALIZATION  = False
-SAVE_MODEL          = True
+TEST_MODEL          = False  # Test a saved model.
+TOP_K_SOFTMAX       = False
 
 
 #
@@ -78,7 +82,7 @@ def init(log_file_base='LogFile', logging_level=logging.INFO):
     log_dir = 'logs'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    string_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    string_date = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     log_file = '{}_{}.log'.format(log_file_base, string_date)
     log = setup_logger(log_dir, log_file, log_level=logging_level)
 
@@ -88,8 +92,8 @@ def init(log_file_base='LogFile', logging_level=logging.INFO):
 # Setup Logging
 def setup_logger(log_dir=None,
                  log_file=None,
-                 log_format=logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                                              datefmt="%Y-%m-%d %H:%M:%S"),
+                 log_format=logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                                              datefmt='%Y-%m-%d %H:%M:%S'),
                  log_level=logging.INFO):
     """
     Setup a logger.
@@ -144,7 +148,6 @@ def grayscale_and_normalize(X):
     Returns:
         A grayscale, normalized array of images.
     """
-
     # Convert from RGB to grayscale and normalize.
 #    X = [normalize(grayscale(img)) for img in X]
 #    X = [normalize_min_max(grayscale(img)) for img in X]
@@ -337,8 +340,7 @@ def rotate_bound(image, angle):
         by Adrian Rosebrock on January 2, 2017 in OpenCV 3, Tutorials
         https://www.pyimagesearch.com/2017/01/02/rotate-images-correctly-with-opencv-and-python/
     """
-    # grab the dimensions of the image and then determine the
-    # center
+    # grab the dimensions of the image and then determine the center
     (h, w) = image.shape[:2]
     (cX, cY) = (w // 2, h // 2)
 
@@ -375,7 +377,6 @@ def random_scale(image):
     Returns:
         The scaled image.
     """
-
     rows, cols, _ = image.shape
     sf = random.randint(-MAX_IMAGE_SCALE, MAX_IMAGE_SCALE)  # scale factor
 
@@ -461,7 +462,6 @@ def LeNet(x, n_classes, keep_prob, log):
     Returns:
         A TensorFlow LeNet-5 model.
     """
-
     # Store layer weights & biass
     weights = {
         # convolution weights: [filter height, filter width, input depth, output depth]
@@ -518,7 +518,7 @@ def LeNet(x, n_classes, keep_prob, log):
     log.debug('layer4: {}'.format(layer4))
 
     # Layer 5: Fully Connected. Input = 84. Output = 10.
-    logits = tf.add(tf.matmul(layer4, weights['out']), biases['out'])
+    logits = tf.add(tf.matmul(layer4, weights['out']), biases['out'], name='logits')
     log.debug('layer4: {}'.format(logits))
 
     return logits
@@ -567,7 +567,9 @@ def load_data(data_dir, log):
     if TEST_ON_CIFAR10:
         X_train, y_train, X_valid, y_valid, X_test, y_test = load_cifar10_data()
     else:
-        X_train, y_train, X_valid, y_valid, X_test, y_test = load_pickle_data(data_dir)
+        X_train, y_train = load_pickle_data(data_dir, 'train')
+        X_valid, y_valid = load_pickle_data(data_dir, 'valid')
+        X_test,  y_test  = load_pickle_data(data_dir, 'test')
 
     # Sanity checks.
     assert(len(X_train) == len(y_train))
@@ -619,34 +621,63 @@ def load_cifar10_data():
     return X_train, y_train, X_valid, y_valid, X_test, y_test
 
 
-def load_pickle_data(data_dir):
+def load_pickle_data(data_dir, file_name):
     """
     Load data from pickle files in the specified directory.
 
     Args:
-        data_dir: Directory name where pickle files can be found.
+        data_dir: Directory name where the pickle file can be found.
+        file_name: Pickle file name.
 
     Returns:
-        X_train, y_train: Training data
-        X_valid, y_valid: Validation data
+        X, y: Images and labels.
+    """
+    pickle_file = os.path.join(data_dir, file_name + '.p')
+    with open(pickle_file, mode='rb') as f:
+        data = pickle.load(f)
+
+    X, y = data['features'], data['labels']
+
+    return X, y
+
+
+def load_test_data(test_data_dir, log):
+    """
+    Load test data from the test images directory.
+
+    Args:
+        test_data_dir: Directory name where test image files and labels can be found.
+        log: Log file writer.
+
+    Returns:
         X_test, y_test: Test data
     """
-    training_file   = os.path.join(data_dir, 'train.p')
-    validation_file = os.path.join(data_dir, 'valid.p')
-    testing_file    = os.path.join(data_dir, 'test.p')
+    log.info('')
+    log.info('Load test data ...')
 
-    with open(training_file, mode='rb') as f:
-        train = pickle.load(f)
-    with open(validation_file, mode='rb') as f:
-        valid = pickle.load(f)
-    with open(testing_file, mode='rb') as f:
-        test = pickle.load(f)
+    # Load additional test images and labels.
+    X_test = []
+    y_test = []
+    image_labels_file = os.path.join(test_data_dir, 'image_labels.csv')
+    image_labels = pd.read_csv(image_labels_file, index_col=['ImageId'])
+    for index, row in image_labels.iterrows():
+        image_file = os.path.join(test_data_dir, 'image' + str(index).zfill(2) + '.jpg')
+        log.info('Test image: {}'.format(image_file))
+        image = mpimg.imread(image_file)
+        image = cv2.resize(image, (32, 32))  # Scale to 32x32x3
+        X_test.append(image)
+        y_test.append(row['ClassId'])
 
-    X_train, y_train = train['features'], train['labels']
-    X_valid, y_valid = valid['features'], valid['labels']
-    X_test,  y_test  = test['features'],  test['labels']
+    X_test = np.array(X_test)
+    y_test = np.array(y_test)
 
-    return X_train, y_train, X_valid, y_valid, X_test, y_test
+    n_test = len(X_test)   # Number of testing examples
+
+    log.info('')
+    log.info('Test Set: {:5} images'.format(n_test))
+    log.info('')
+
+    return X_test, y_test
 
 
 def visualize_data(data_dir, X, y, n_classes, output_dir, log):
@@ -672,9 +703,21 @@ def visualize_data(data_dir, X, y, n_classes, output_dir, log):
     log.info('Signs:\n{}'.format(sign_names.head(50)))
     # log.info('sign name[4]=''{}'''.format(sign_names.loc[4][0]))
 
+    label_dict = {v: k for v, k in enumerate(y)}
+    fig = plt.figure(figsize=(4, 5))
+    columns = 3
+    rows = 2
+    for index, image in enumerate(X):
+        class_id = label_dict[index]
+        image = image.squeeze()
+        ax = fig.add_subplot(rows, columns, index+1)
+        ax.set_title('ClassId={}'.format(class_id))
+        plt.imshow(image, cmap='gray')
+    fig.subplots_adjust(hspace=.1, wspace=.2)
+    plt.show()
+
     # Display a sample of each sign type.
     label_dict = {k: v for v, k in enumerate(y)}
-
     fig = plt.figure(figsize=(16, 20))
     columns = 10
     rows = int((n_classes / columns) + 1)
@@ -685,7 +728,8 @@ def visualize_data(data_dir, X, y, n_classes, output_dir, log):
         ax.set_title('ClassId={}'.format(k))
         plt.imshow(image, cmap='gray')
     fig.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'signs.png'))
+    if output_dir:
+        plt.savefig(os.path.join(output_dir, 'signs.png'))
     plt.show()
 
     # Convert the training label data to a DataFrame to make it easier to
@@ -704,8 +748,102 @@ def visualize_data(data_dir, X, y, n_classes, output_dir, log):
     ax.set_ylabel('Frequency')
     ax.set_title('Traffic Sign Frequency in Training Dataset')
     fig.set_size_inches(18, 10)
-    plt.savefig(os.path.join(output_dir, 'signs_hist.png'))
+    if output_dir:
+        plt.savefig(os.path.join(output_dir, 'signs_hist.png'))
     plt.show()
+
+
+def visualize_test_data(data_dir, X, y, log):
+    """
+    Data visualization for test data. Instead of displaying a sample of each sign type
+    we will display all test images. Also no need for a histogram or for saving plots
+    to files.
+
+    Args:
+        data_dir: Look for the sign names file here.
+        X: Data values.
+        y: Data labels.
+        log: Log file writer.
+
+    Returns:
+        None
+    """
+
+    # Load the sign name lookup table.
+    sign_names_file = os.path.join(data_dir, 'signnames.csv')
+    sign_names = pd.read_csv(sign_names_file, index_col=['ClassId'])
+
+    # Display all test images.
+    label_dict = {v: k for v, k in enumerate(y)}
+    fig = plt.figure(figsize=(8, 8))
+    columns = 3
+    rows = int((len(y) / columns) + 1)
+    for index, image in enumerate(X):
+        class_id = label_dict[index]
+        image = image.squeeze()
+        ax = fig.add_subplot(rows, columns, index+1)
+        # ax.set_title('ClassId={}'.format(class_id))
+        ax.set_title('Sign={}'.format(sign_names.loc[class_id][0]))
+        plt.imshow(image, cmap='gray')
+    # fig.subplots_adjust(hspace=.1, wspace=.2)
+    fig.tight_layout()
+    plt.show()
+
+
+def top_k_softmax(k, sess, X, X_normalized, x, keep_prob, log):
+    """
+    Display the top 'k' softmax probabilities for the test images.
+
+    Args:
+        k: Number of probabilties to display.
+        sess: Current TensorFlow session.
+        X: Input data.
+        X_normalized: Normalized input data.
+        x: Input tensor.
+        keep_prob: Keep probability for dropout.
+        log: Log file writer.
+
+    Return:
+        None
+    """
+    # Load validation images and labels.
+    X_valid, y_valid = load_pickle_data(DATA_DIR, 'valid')
+
+    # Get the logits from the current graph.
+    graph = tf.get_default_graph()
+    logits = graph.get_tensor_by_name('logits:0')
+
+    # Top 'k' softmax probabilities for additional test data.
+    log.info('Top {} softmax probabilities for test images.'.format(k))
+    softmax_logits = tf.nn.softmax(logits)
+    top_k_op = tf.nn.top_k(softmax_logits, k=k)
+    top_k = sess.run(top_k_op,
+                    feed_dict={x: X_normalized, keep_prob: 1.0})
+
+    fig, ax = plt.subplots(len(X), 1+k, figsize=(12, 8))
+    fig.subplots_adjust(hspace=.4, wspace=.6)
+
+    # top_k[0] == softmax probabilities
+    # top_k[1] == index of the best guess
+    # top_k[:, i, j] == probability/best guess for image i, rank j
+    for i, image in enumerate(X):
+        log.info('Top {} softmax probabilities for image{}:'.format(k, str(i).zfill(2)))
+        ax[i][0].axis('off')
+        ax[i][0].imshow(image)
+        ax[i][0].set_title('Input')
+        for j in range(5):
+            # Use X_valid, y_valid assuming that this dataset contains
+            # at least one instance of each traffic sign class.
+            prob  = top_k[0][i][j]*100
+            guess = top_k[1][i][j]
+            index = np.argwhere(y_valid == guess)[0]
+            log.info('rank={}: guess: {} ({:.0f}%)'.format(j+1, str(guess).zfill(2), prob))
+            ax[i][j+1].axis('off')
+            ax[i][j+1].imshow(X_valid[index].squeeze(), cmap='gray')
+            ax[i][j+1].set_title('guess: {} ({:.0f}%)'.format(guess, prob))
+
+    if DATA_VISUALIZATION:
+        plt.show()
 
 
 def preprocess_data(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, log):
@@ -747,7 +885,7 @@ def preprocess_data(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classe
     return X_train, y_train, X_valid, y_valid, X_test, y_test
 
 
-def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, model_dir, log):
+def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, model_dir, model_name, log):
     """
     Train the model and save it to a file.
 
@@ -757,6 +895,7 @@ def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
         X_test, y_test: Test data
         n_classes: Number of output classes.
         model_dir: Save the model to this directory.
+        model_name: Save the model using this name.
         log: Log file writer.
 
     Returns:
@@ -768,9 +907,9 @@ def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
     tf.reset_default_graph()
 
     # Train the model on the training data.
-    x = tf.placeholder(tf.float32, (None, 32, 32, 1))
-    y = tf.placeholder(tf.int32, (None))
-    keep_prob = tf.placeholder(tf.float32)  # Keep probability for dropout.
+    x = tf.placeholder(tf.float32, (None, 32, 32, 1), name='x')
+    y = tf.placeholder(tf.int32, (None), name='y')
+    keep_prob = tf.placeholder(tf.float32, name='keep_prob')    # Keep probability for dropout.
     one_hot_y = tf.stop_gradient(tf.one_hot(y, n_classes))
 
     logits             = LeNet(x, n_classes, keep_prob, log)
@@ -781,7 +920,7 @@ def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
     training_operation = optimizer.minimize(loss_operation)
 
     correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(one_hot_y, 1))
-    accuracy_operation = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    accuracy_operation = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy_operation')
 
     saver = tf.train.Saver()
     with tf.Session() as sess:
@@ -805,15 +944,14 @@ def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
             log.info('Validation Accuracy = {:.3f}'.format(valid_accuracy))
             log.info('')
 
-        if SAVE_MODEL:
-            saver.save(sess, os.path.join(model_dir, 'lenet'))
-            log.info('Model saved')
+        # Save the trained model.
+        save_path = saver.save(sess, os.path.join(model_dir, model_name))
+        log.info('Model saved to "{}"'.format(save_path))
 
     # Calculate and display accuracy for the model on the test data.
     saver = tf.train.Saver()
     with tf.Session() as sess:
         saver.restore(sess, tf.train.latest_checkpoint(model_dir))
-
         test_accuracy = evaluate(X_test, y_test,
                                  x, y, keep_prob, accuracy_operation)
         log.info('Test Accuracy = {:.3f}'.format(test_accuracy))
@@ -828,110 +966,76 @@ def main(name):
     # Init
     log = init(log_file_base, logging.INFO)
 
-    # Load data
-    X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes = load_data(DATA_DIR, log)
-
-    # Data visualization
-    if DATA_VISUALIZATION:
-        visualize_data(DATA_DIR, X_train, y_train, n_classes, VISUAL_DIR, log)
-
     # Disable TensorFlow warnings.
     tf.logging.set_verbosity(tf.logging.ERROR)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # {'0', '1', '2', '3'}
 
-    # Preprocess data.
-    X_train, y_train, X_valid, y_valid, X_test, y_test = preprocess_data(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, log)
-
+    #
     # Train the model.
-    train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, MODEL_DIR, log)
+    #
+    if not TEST_MODEL:
+        # Load data
+        X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes = load_data(DATA_DIR, log)
 
-#    #
-#    # Additional test data.
-#    #
-#
-#    # Load additional test images and labels.
-#    X_test_2 = []
-#    y_test_2 = []
-#    image_labels_file = './test_images/image_labels.csv'
-#    image_labels = pd.read_csv(image_labels_file, index_col=['ImageId'])
-#    for index, row in image_labels.iterrows():
-#        image_file = './test_images/image' + str(index).zfill(2) + '.jpg'
-#        log.info('image: {}'.format(image_file))
-#        image = mpimg.imread(image_file)
-#        image = cv2.resize(image, (32, 32))  # Scale to 32x32x3
-#        X_test_2.append(image)
-#        y_test_2.append(row['ClassId'])
-#    X_test_2 = np.array(X_test_2)
-#    y_test_2 = np.array(y_test_2)
-#
-#    # Display
-#    label_2_dict = {v: k for v, k in enumerate(y_test_2)}
-#
-#    fig = plt.figure(figsize=(4, 5))
-#    columns = 3
-#    rows = 2
-#    for index, image in enumerate(X_test_2):
-#        class_id = label_2_dict[index]
-#        image = image.squeeze()
-#        ax = fig.add_subplot(rows, columns, index+1)
-#        ax.set_title('ClassId={}'.format(class_id))
-#        plt.imshow(image, cmap='gray')
-#    fig.subplots_adjust(hspace=.1, wspace=.2)
-#    plt.show()
-#
-#    # Normalize the new test data.
-#    X_test_2_normalized = grayscale_and_normalize(X_test_2)
-#
-#    # Accuracy for each image. The accuracy will be either 0.0 or 1.0.
-#    saver = tf.train.Saver()
-#    with tf.Session() as sess:
-#        saver.restore(sess, tf.train.latest_checkpoint('./model'))
-#        for offset in range(len(X_test_2_normalized)):
-#            end = offset + 1
-#            batch_x, batch_y = X_test_2_normalized[offset:end], y_test_2[offset:end]
-#            accuracy = sess.run(accuracy_operation,
-#                                feed_dict={x: batch_x, y: batch_y, keep_prob: 1.0})
-#            log.info("Test Accuracy (image{}) = {:.3f}".format(str(offset).zfill(2), accuracy))
-#
-#    # Test the model on new test data as a set to get overall accuracy.
-#    saver = tf.train.Saver()
-#    with tf.Session() as sess:
-#        saver.restore(sess, tf.train.latest_checkpoint('./model'))
-#        test_accuracy = evaluate(X_test_2_normalized, y_test_2,
-#                                 x, y, keep_prob, accuracy_operation)
-#        log.info("Test Accuracy (2) = {:.3f}".format(test_accuracy))
-#
-#    # Top five softmax probabilities for additional test data.
-#    softmax_logits = tf.nn.softmax(logits)
-#    k = 5
-#    top_k_op = tf.nn.top_k(softmax_logits, k=k)
-#
-#    saver = tf.train.Saver()
-#    with tf.Session() as sess:
-#        sess.run(tf.global_variables_initializer())
-#        saver.restore(sess, tf.train.latest_checkpoint('./model'))
-#        top_k = sess.run(top_k_op,
-#                         feed_dict={x: X_test_2_normalized, keep_prob: 1.0})
-#
-#        fig, ax = plt.subplots(len(X_test_2), 1+k, figsize=(12, 8))
-#        fig.subplots_adjust(hspace=.4, wspace=.6)
-#
-#        # top_k[0] == softmax probabilities
-#        # top_k[1] == index of the best guess
-#        # top_k[:, i, k] == probability/best guess for image i, rank k
-#        for i, image in enumerate(X_test_2):
-#            ax[i][0].axis('off')
-#            ax[i][0].imshow(image)
-#            ax[i][0].set_title('Input')
-#            for k in range(5):
-#                # Use X_valid, y_valid assuming that this dataset contains
-#                # at least one instance of each traffic sign class.
-#                prob  = 100*top_k[0][i][k]
-#                guess = top_k[1][i][k]
-#                index = np.argwhere(y_valid == guess)[0]
-#                ax[i][k+1].axis('off')
-#                ax[i][k+1].imshow(X_valid[index].squeeze(), cmap='gray')
-#                ax[i][k+1].set_title('guess: {} ({:.0f}%)'.format(guess, prob))
+        # Data visualization
+        if DATA_VISUALIZATION:
+            visualize_data(DATA_DIR, X_train, y_train, n_classes, VISUAL_DIR, log)
+
+        # Preprocess data.
+        X_train, y_train, X_valid, y_valid, X_test, y_test = preprocess_data(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, log)
+
+        # Train the model.
+        train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes, MODEL_DIR, MODEL_NAME, log)
+
+    #
+    # Test the model on sample images.
+    #
+    else:
+        # Load test images and labels.
+        X_test, y_test = load_test_data(TEST_IMAGE_DIR, log)
+
+        # Display test data.
+        if DATA_VISUALIZATION:
+            visualize_test_data(DATA_DIR, X_test, y_test, log)
+
+        # Normalize the new test data.
+        log.info('Grayscale+normalization for training data ...')
+        X_test_normalized = grayscale_and_normalize(X_test)
+        log.info('')
+
+        # Measure accuracy.
+        log.info('Model accuracy:')
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+
+            saver = tf.train.import_meta_graph(os.path.join(MODEL_DIR, MODEL_NAME + '.meta'))
+            saver.restore(sess, tf.train.latest_checkpoint(MODEL_DIR))
+
+            graph = tf.get_default_graph()
+            x                  = graph.get_tensor_by_name('x:0')
+            y                  = graph.get_tensor_by_name('y:0')
+            keep_prob          = graph.get_tensor_by_name('keep_prob:0')
+            accuracy_operation = graph.get_tensor_by_name('accuracy_operation:0')
+
+            # Accuracy for each image. The accuracy will be either 0.0 or 1.0.
+            for offset in range(len(X_test_normalized)):
+                end = offset + 1    # Batch size is 1 - test each image individually.
+                batch_x, batch_y = X_test_normalized[offset:end], y_test[offset:end]
+                accuracy = sess.run(accuracy_operation,
+                                    feed_dict={x: batch_x, y: batch_y, keep_prob: 1.0})
+                log.info('Test Accuracy (image{}) = {:.3f}'.format(str(offset).zfill(2), accuracy))
+            log.info('')
+
+            # Get overall accuracy for the test images.
+            test_accuracy = evaluate(X_test_normalized, y_test,
+                                     x, y, keep_prob, accuracy_operation)
+            log.info('Test Accuracy (overall) = {:.3f}'.format(test_accuracy))
+
+            if TOP_K_SOFTMAX:
+                top_k_softmax(5, sess, X_test, X_test_normalized, x, keep_prob, log)
+
+    # Blank line at end of log file.
+    log.info('')
 
     # Close the log file.
     for handler in log.handlers[:]:
