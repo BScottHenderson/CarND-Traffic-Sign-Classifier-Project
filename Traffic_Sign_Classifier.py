@@ -764,7 +764,7 @@ def preprocess_and_train(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
     one_hot_y = tf.one_hot(y, n_classes)
 
     logits             = LeNet(x, n_classes, keep_prob, log)
-    cross_entropy      = tf.nn.softmax_cross_entropy_with_logits(labels=one_hot_y, logits=logits)
+    cross_entropy      = tf.nn.softmax_cross_entropy_with_logits_v2(labels=one_hot_y, logits=logits)
     loss_operation     = tf.reduce_mean(cross_entropy)
     optimizer          = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE)
     training_operation = optimizer.minimize(loss_operation)
