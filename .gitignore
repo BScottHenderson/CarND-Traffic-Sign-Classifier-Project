@@ -4,6 +4,7 @@ logs
 *.h5
 *.swp
 *.p
+model
 model.*
 
 Udacity Reviews*
