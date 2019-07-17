@@ -16,6 +16,8 @@ import datetime
 import random
 import pickle
 
+import click
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -36,12 +38,6 @@ MODEL_DIR           = './model'
 MODEL_NAME          = 'lenet'
 VISUAL_DIR          = './visualization'
 TEST_IMAGE_DIR      = './test_images'
-
-# Run option flags.
-TEST_ON_CIFAR10     = False
-DATA_VISUALIZATION  = False
-TEST_MODEL          = True  # Test a saved model.
-TOP_K_SOFTMAX       = True
 
 
 #
@@ -568,12 +564,13 @@ def evaluate(X_data, y_data, x, y, keep_prob, accuracy_operation):
     return total_accuracy / num_examples
 
 
-def load_data(data_dir, log):
+def load_data(data_dir, use_cifar10, log):
     """
     Load data for model training and evaluation.
 
     Args:
         data_dir: Directory name where pickle files can be found.
+        use_cifar10: Load CIFAR-10 data?
         log: Log file writer.
 
     Returns:
@@ -582,7 +579,7 @@ def load_data(data_dir, log):
         X_test, y_test: Test data
         n_classes: Number of output classes.
     """
-    if TEST_ON_CIFAR10:
+    if use_cifar10:
         X_train, y_train, X_valid, y_valid, X_test, y_test = load_cifar10_data()
     else:
         X_train, y_train = load_pickle_data(data_dir, 'train')
@@ -808,7 +805,7 @@ def visualize_test_data(data_dir, X, y, log):
     plt.show()
 
 
-def top_k_softmax(k, sess, X, X_normalized, x, keep_prob, log):
+def top_k_softmax(k, sess, X, X_normalized, x, keep_prob, visualization, log):
     """
     Display the top 'k' softmax probabilities for the test images.
 
@@ -819,6 +816,7 @@ def top_k_softmax(k, sess, X, X_normalized, x, keep_prob, log):
         X_normalized: Normalized input data.
         x: Input tensor.
         keep_prob: Keep probability for dropout.
+        visualization: Display data visualization plot?
         log: Log file writer.
 
     Return:
@@ -860,7 +858,7 @@ def top_k_softmax(k, sess, X, X_normalized, x, keep_prob, log):
             ax[i][j+1].imshow(X_valid[index].squeeze(), cmap='gray')
             ax[i][j+1].set_title('guess: {} ({:.0f}%)'.format(guess, prob))
 
-    if DATA_VISUALIZATION:
+    if visualization:
         plt.show()
 
 
@@ -991,9 +989,19 @@ def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
         log.info('Test Accuracy = {:.3f}'.format(test_accuracy))
 
 
-def main(name=None):
+@click.command()
+@click.option('--cifar10/--no-cifar10', 'use_cifar10', default=False,
+              help='Load CIFAR-10 data or pickled data?')
+@click.option('--visualization/--no-visualization', default=False,
+              help='Display visualization?')
+@click.option('--test-model/--no-test-model', 'test_model', default=False,
+              help='Train the model or test an existing model?')
+@click.option('--top-k-softmax/--no-top-k-softmax', 'display_top_k_softmax', default=False,
+              help='Write top-k-softmax to log? Combine with visualization flag to display a plot.')
+@click.option('--k', default=5, help='Used with the top-k-softmax flag.')
+def main(use_cifar10, visualization, test_model, display_top_k_softmax, name=None):
 
-    print('Name: {}'.format(name))
+    # print('Name: {}'.format(name))
     _, tail = os.path.split(name)
     log_file_base, _ = os.path.splitext(tail)
 
@@ -1007,12 +1015,12 @@ def main(name=None):
     #
     # Train the model.
     #
-    if not TEST_MODEL:
+    if not test_model:  # IF we're not testing, we're training.
         # Load data
-        X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes = load_data(DATA_DIR, log)
+        X_train, y_train, X_valid, y_valid, X_test, y_test, n_classes = load_data(DATA_DIR, use_cifar10, log)
 
         # Data visualization
-        if DATA_VISUALIZATION:
+        if visualization:
             visualize_data(DATA_DIR, X_train, y_train, n_classes, VISUAL_DIR, log)
 
         # Preprocess data.
@@ -1029,7 +1037,7 @@ def main(name=None):
         X_test, y_test = load_test_data(TEST_IMAGE_DIR, log)
 
         # Display test data.
-        if DATA_VISUALIZATION:
+        if visualization:
             visualize_test_data(DATA_DIR, X_test, y_test, log)
 
         # Normalize the new test data.
@@ -1065,8 +1073,8 @@ def main(name=None):
                                      x, y, keep_prob, accuracy_operation)
             log.info('Test Accuracy (overall) = {:.3f}'.format(test_accuracy))
 
-            if TOP_K_SOFTMAX:
-                top_k_softmax(5, sess, X_test, X_test_normalized, x, keep_prob, log)
+            if display_top_k_softmax:
+                top_k_softmax(k, sess, X_test, X_test_normalized, x, keep_prob, visualization, log)
 
     # Blank line at end of log file.
     log.info('')
@@ -1078,4 +1086,5 @@ def main(name=None):
 
 
 if __name__ == '__main__':
-    main(*sys.argv)
+    # main(*sys.argv)
+    main()
