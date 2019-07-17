@@ -58,8 +58,8 @@ SIGMA = 0.15
 # Training parameters
 DROPOUT_KEEP_PROB = 0.5
 LEARNING_RATE     = 0.001
-EPOCHS            = 25
-BATCH_SIZE        = 128
+EPOCHS            = 35
+BATCH_SIZE        = 192
 
 
 def init_logging(log_file_base='LogFile', logging_level=logging.INFO):
@@ -144,28 +144,31 @@ def grayscale_and_normalize(X):
         A grayscale, normalized array of images.
     """
     # Convert from RGB to grayscale and normalize.
-    # X = [normalize(grayscale(img)) for img in X]
-    X = [normalize_min_max(grayscale(img)) for img in X]
+    # X = [normalize(grayscale(img)) for img in X]              # 0.760
+    # X = [normalize_min_max(grayscale(img)) for img in X]      # 0.931
+    # X = [histogram_equalization(grayscale(img)) for img in X] # 0.054 ???
+    X = [normalize_min_max(histogram_equalization(grayscale(img))) for img in X]    # 0.933
 
     return X
 
 
-def grayscale(image):
+def grayscale(img):
     """
     Convert an RGB image to grayscale.
 
     Args:
-        image: Image to be converted.
+        img: Image to be converted.
 
     Returns:
         A grayscale image.
     """
-    img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    img= img[:, :, np.newaxis]
-    return img
+    gray_img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    gray_img = gray_img[:, :, np.newaxis]
+
+    return gray_img
 
 
-def normalize(image):
+def normalize(img):
     """
     Normalize an image array.
 
@@ -174,20 +177,22 @@ def normalize(image):
     formula below.
 
     Args:
-        image: input image
+        img: input image
 
     Returns:
         Normalized image
     """
-    return (image - 128) / 128
+    normalized_img = (img - 128) / 128
+
+    return normalized_img
 
 
-def normalize_min_max(image, a=0.1, b=0.9):
+def normalize_min_max(img, a=0.1, b=0.9):
     """
     Normalize the image with Min-Max scaling to a range of [a, b]
 
     Args:
-        image: The image to be normalized
+        img: The image to be normalized
 
     Returns:
         Normalized image data
@@ -198,9 +203,30 @@ def normalize_min_max(image, a=0.1, b=0.9):
     x_max = 255
 
     # x' = a + ((x - x_min) * (b - a)) / (x_max - x_min)
-    normalized_image = a + ((image - x_min) * (b - a)) / (x_max - x_min)
+    normalized_img = a + ((img - x_min) * (b - a)) / (x_max - x_min)
 
-    return normalized_image
+    return normalized_img
+
+
+def histogram_equalization(img):
+    """
+    Normalize an image using CLAHE (Contrast Limiting Adaptive Histogram Equalization)
+    https://docs.opencv.org/3.1.0/d5/daf/tutorial_py_histogram_equalization.html
+
+    Args:
+        img: The image to be normalized
+
+    Returns:
+        Normalized image data
+    """
+    # Create a CLAHE object (Arguments are optional).
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    normalized_img = clahe.apply(img)
+
+    # Subsequent processing expects to see (32, 32, 1) while clahe gives us just (32, 32).
+    normalized_img = normalized_img[:, :, np.newaxis]
+
+    return normalized_img
 
 
 def add_modified_images(X, y, n_classes, min_sample_size):
