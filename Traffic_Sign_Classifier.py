@@ -133,8 +133,7 @@ def grayscale_and_normalize(X):
     """
     Prepare image data for further processing. Steps:
         1. Convert to grayscale.
-        2. Normalize the image data so that it has mean zero and
-        equal variance.
+        2. Normalize the image data so that it has mean zero and equal variance.
     Assume that the images have dimensions (32, 32, 3) on input.
     After processing the images will have dimensions (32, 32, 1).
 
@@ -145,26 +144,8 @@ def grayscale_and_normalize(X):
         A grayscale, normalized array of images.
     """
     # Convert from RGB to grayscale and normalize.
-#    X = [normalize(grayscale(img)) for img in X]
-#    X = [normalize_min_max(grayscale(img)) for img in X]
-    # Using the either of the above steps to convert to grayscale and
-    # normalize does not work well and causes the model accuracy to be
-    # extremely low. I don't know why but the following two simple lines
-    # of code yield much better results.
-    X = np.sum(X / 3, axis=3, keepdims=True)
-    X = (X - 128) / 128
-
-    """
-    Subtract the mean
-    Then divide by the standard deviation
-
-    Normalize the layer by subtracting its mean and dividing by its standard deviation.
-    """
-    print(X.shape)
-    mu = np.mean(X)
-    print('mean: {}'.format(mu))
-    sigma = np.std(X)
-    print('stddev: {}'.format(sigma))
+    # X = [normalize(grayscale(img)) for img in X]
+    X = [normalize_min_max(grayscale(img)) for img in X]
 
     return X
 
@@ -198,12 +179,12 @@ def normalize(image):
     Returns:
         Normalized image
     """
-    return image - 128 / 128
+    return (image - 128) / 128
 
 
-def normalize_min_max(image):
+def normalize_min_max(image, a=0.1, b=0.9):
     """
-    Normalize the image with Min-Max scaling to a range of [0.1, 0.9]
+    Normalize the image with Min-Max scaling to a range of [a, b]
 
     Args:
         image: The image to be normalized
@@ -211,19 +192,13 @@ def normalize_min_max(image):
     Returns:
         Normalized image data
     """
-    # Normalize image data to the range [a, b]
-    a = 0.1
-    b = 0.9
-    d = b - a  # delta
-
     # Assume image data is in grayscale, with the current values in
     # the range [0, 255] (uint8).
     x_min = 0
     x_max = 255
-    x_del = x_max - x_min  # delta
 
     # x' = a + ((x - x_min) * (b - a)) / (x_max - x_min)
-    normalized_image = [a + ((x.astype(float) - x_min) * d) / x_del for x in image]
+    normalized_image = a + ((image - x_min) * (b - a)) / (x_max - x_min)
 
     return normalized_image
 
@@ -896,8 +871,8 @@ def preprocess_data(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classe
 
     log.info('Data augmentation for training data ...')
     X_train, y_train = add_modified_images(X_train, y_train, n_classes, 700)
-    log.info('Data augmentation for validation data ...')
-    X_valid, y_valid = add_modified_images(X_valid, y_valid, n_classes,  50)
+    # log.info('Data augmentation for validation data ...')
+    # X_valid, y_valid = add_modified_images(X_valid, y_valid, n_classes,  50)
     # Do *not* add modified images to the test dataset.
     log.info('')
 
@@ -988,7 +963,6 @@ def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
                                  x, y, keep_prob, accuracy_operation)
         log.info('Test Accuracy = {:.3f}'.format(test_accuracy))
 
-
 @click.command()
 @click.option('--cifar10/--no-cifar10', 'use_cifar10', default=False,
               help='Load CIFAR-10 data or pickled data?')
@@ -999,10 +973,10 @@ def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
 @click.option('--top-k-softmax/--no-top-k-softmax', 'display_top_k_softmax', default=False,
               help='Write top-k-softmax to log? Combine with visualization flag to display a plot.')
 @click.option('--k', default=5, help='Used with the top-k-softmax flag.')
-def main(use_cifar10, visualization, test_model, display_top_k_softmax, name=None):
+def main(use_cifar10, visualization, test_model, display_top_k_softmax, k):
 
-    # print('Name: {}'.format(name))
-    _, tail = os.path.split(name)
+    print('Name: {}'.format(__file__))
+    _, tail = os.path.split(__file__)
     log_file_base, _ = os.path.splitext(tail)
 
     # Init
@@ -1086,5 +1060,4 @@ def main(use_cifar10, visualization, test_model, display_top_k_softmax, name=Non
 
 
 if __name__ == '__main__':
-    # main(*sys.argv)
     main()
