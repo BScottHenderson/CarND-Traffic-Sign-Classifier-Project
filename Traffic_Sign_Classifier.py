@@ -534,7 +534,96 @@ def LeNet(x, n_classes, keep_prob, log):
 
     # Layer 5: Fully Connected. Input = 84. Output = 10.
     logits = tf.add(tf.matmul(layer4, weights['out']), biases['out'], name='logits')
-    log.debug('layer4: {}'.format(logits))
+    log.debug('logits: {}'.format(logits))
+
+    return logits
+
+
+def LeNet_modified(x, n_classes, keep_prob, log):
+    """
+    Implement a modified LeNet-5 model.
+    - Add an extra convolution layer.
+    - Remove the max pooling layers.
+    - Add a dropout for each of the two fully connected layers.
+
+    Args:
+        x: input data
+        n_classes: number of output classes
+        keep_prob: TensorFlow placeholder for dropout keep probability
+        log: log file object
+
+    Returns:
+        A TensorFlow LeNet-5 model.
+    """
+    log.info('Hyperparameters for model weight initialization:')
+    log.info('')
+    log.info('mu:    {}'.format(MU))
+    log.info('sigma: {}'.format(SIGMA))
+    log.info('')
+
+    # Store layer weights & biass
+    weights = {
+        # convolution weights: [filter height, filter width, input depth, output depth]
+        'wc1': tf.Variable(tf.random_normal([5, 5,  1,  6],    mean=MU, stddev=SIGMA)),
+        'wc2': tf.Variable(tf.random_normal([5, 5,  6, 16],    mean=MU, stddev=SIGMA)),
+        'wc3': tf.Variable(tf.random_normal([5, 5, 16, 32],    mean=MU, stddev=SIGMA)),
+        # fully connected weights: [input length, output length]
+        'wd1': tf.Variable(tf.random_normal([3200, 900],       mean=MU, stddev=SIGMA)),
+        'wd2': tf.Variable(tf.random_normal([ 900, 300],       mean=MU, stddev=SIGMA)),
+        'out': tf.Variable(tf.random_normal([ 300, n_classes], mean=MU, stddev=SIGMA))}
+
+    biases = {
+        # convolution bias: [output depth]
+        'bc1': tf.Variable(tf.zeros([ 6])),
+        'bc2': tf.Variable(tf.zeros([16])),
+        'bc3': tf.Variable(tf.zeros([32])),
+        # fully connected bias: [output length]
+        'bd1': tf.Variable(tf.zeros([900])),
+        'bd2': tf.Variable(tf.zeros([300])),
+        'out': tf.Variable(tf.zeros([n_classes]))}
+
+    log.debug('x: {}'.format(x))
+
+    # Layer 1: Convolutional. Input = 32x32x1. Output = 28x28x6.
+    # Activation.
+    layer1 = conv2d(x, weights['wc1'], biases['bc1'])
+    log.debug('layer1: {}'.format(layer1))
+
+    # Layer 2: Convolutional. Output = 24x24x16.
+    # Activation.
+    layer2 = conv2d(layer1, weights['wc2'], biases['bc2'])
+    log.debug('layer2: {}'.format(layer2))
+
+    # Layer 3: Convolutional. Output = 20x20x32.
+    # Activation.
+    layer3 = conv2d(layer2, weights['wc3'], biases['bc3'])
+    log.debug('layer3: {}'.format(layer3))
+
+    # Pooling. Input = 20x20x32. Output = 10x10x32.
+    layer3 = maxpool2d(layer3, k=2)  # k=2 -> cut input size in half
+    log.debug('layer3: {}'.format(layer3))
+
+    # Flatten. Input = 10x10x32. Output = 3200.
+    layer3 = flatten(layer3)
+    log.debug('layer3: {}'.format(layer3))
+
+    # Layer 4: Fully Connected. Input = 3200. Output = 900.
+    # Activation.
+    layer4 = tf.add(tf.matmul(layer3, weights['wd1']), biases['bd1'])
+    layer4 = tf.nn.relu(layer4)
+    layer4 = tf.nn.dropout(layer4, keep_prob)
+    log.debug('layer4: {}'.format(layer4))
+
+    # Layer 4: Fully Connected. Input = 900. Output = 300.
+    # Activation.
+    layer5 = tf.add(tf.matmul(layer4, weights['wd2']), biases['bd2'])
+    layer5 = tf.nn.relu(layer5)
+    layer5 = tf.nn.dropout(layer5, keep_prob)
+    log.debug('layer5: {}'.format(layer5))
+
+    # Layer 6: Fully Connected. Input = 300. Output = 10.
+    logits = tf.add(tf.matmul(layer5, weights['out']), biases['out'], name='logits')
+    log.debug('logits: {}'.format(logits))
 
     return logits
 
@@ -945,7 +1034,7 @@ def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
     keep_prob = tf.placeholder(tf.float32, name='keep_prob')    # Keep probability for dropout.
     one_hot_y = tf.stop_gradient(tf.one_hot(y, n_classes))
 
-    logits             = LeNet(x, n_classes, keep_prob, log)
+    logits             = LeNet_modified(x, n_classes, keep_prob, log)
     # https://stats.stackexchange.com/questions/327348/how-is-softmax-cross-entropy-with-logits-different-from-softmax-cross-entropy-wi
     cross_entropy      = tf.nn.softmax_cross_entropy_with_logits_v2(labels=one_hot_y, logits=logits)
     loss_operation     = tf.reduce_mean(cross_entropy)
