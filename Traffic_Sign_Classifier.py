@@ -25,7 +25,7 @@ import cv2
 import tensorflow as tf
 from tensorflow.contrib.layers import flatten
 
-from keras.datasets import cifar10
+from tensorflow.keras.datasets import cifar10
 
 from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
@@ -40,8 +40,8 @@ TEST_IMAGE_DIR      = './test_images'
 # Run option flags.
 TEST_ON_CIFAR10     = False
 DATA_VISUALIZATION  = False
-TEST_MODEL          = False  # Test a saved model.
-TOP_K_SOFTMAX       = False
+TEST_MODEL          = True  # Test a saved model.
+TOP_K_SOFTMAX       = True
 
 
 #
@@ -50,14 +50,14 @@ TOP_K_SOFTMAX       = False
 
 # Data prep parameters
 MAX_IMAGE_SCALE         = 2.0   # Max. image scale factor.
-MAX_IMAGE_TRANSLATION   = 2     # Max. +/- image x/y translation in pixels.
+MAX_IMAGE_TRANSLATION   = 3     # Max. +/- image x/y translation in pixels.
 MAX_IMAGE_ROTATION      = 10.0  # Max. +/- image rotation in degrees.
 MAX_IMAGE_INTENSITY_MOD = 50.0  # Max +/- image intensity modification.
 
 # Model parameters: arguments used for tf.truncated_normal() call to
 # initialze weights and biases.
 MU    = 0
-SIGMA = 0.1
+SIGMA = 0.15
 
 # Training parameters
 DROPOUT_KEEP_PROB = 0.5
@@ -66,7 +66,7 @@ EPOCHS            = 25
 BATCH_SIZE        = 128
 
 
-def init(log_file_base='LogFile', logging_level=logging.INFO):
+def init_logging(log_file_base='LogFile', logging_level=logging.INFO):
     """
     Application initialization.
 
@@ -157,6 +157,18 @@ def grayscale_and_normalize(X):
     # of code yield much better results.
     X = np.sum(X / 3, axis=3, keepdims=True)
     X = (X - 128) / 128
+
+    """
+    Subtract the mean
+    Then divide by the standard deviation
+
+    Normalize the layer by subtracting its mean and dividing by its standard deviation.
+    """
+    print(X.shape)
+    mu = np.mean(X)
+    print('mean: {}'.format(mu))
+    sigma = np.std(X)
+    print('stddev: {}'.format(sigma))
 
     return X
 
@@ -462,6 +474,12 @@ def LeNet(x, n_classes, keep_prob, log):
     Returns:
         A TensorFlow LeNet-5 model.
     """
+    log.info('Hyperparameters for model weight initialization:')
+    log.info('')
+    log.info('mu:    {}'.format(MU))
+    log.info('sigma: {}'.format(SIGMA))
+    log.info('')
+
     # Store layer weights & biass
     weights = {
         # convolution weights: [filter height, filter width, input depth, output depth]
@@ -474,12 +492,12 @@ def LeNet(x, n_classes, keep_prob, log):
 
     biases = {
         # convolution bias: [output depth]
-        'bc1': tf.Variable(tf.random_normal([6],         mean=MU, stddev=SIGMA)),
-        'bc2': tf.Variable(tf.random_normal([16],        mean=MU, stddev=SIGMA)),
+        'bc1': tf.Variable(tf.zeros([6])),
+        'bc2': tf.Variable(tf.zeros([16])),
         # fully connected bias: [output length]
-        'bd1': tf.Variable(tf.random_normal([120],       mean=MU, stddev=SIGMA)),
-        'bd2': tf.Variable(tf.random_normal([84],        mean=MU, stddev=SIGMA)),
-        'out': tf.Variable(tf.random_normal([n_classes], mean=MU, stddev=SIGMA))}
+        'bd1': tf.Variable(tf.zeros([120])),
+        'bd2': tf.Variable(tf.zeros([84])),
+        'out': tf.Variable(tf.zeros([n_classes]))}
 
     log.debug('x: {}'.format(x))
 
@@ -870,6 +888,14 @@ def preprocess_data(X_train, y_train, X_valid, y_valid, X_test, y_test, n_classe
     X_test  = grayscale_and_normalize(X_test)
     log.info('')
 
+    log.info('Hyperparameters for data prep:')
+    log.info('')
+    log.info('Max. scale factor:         {}'.format(MAX_IMAGE_SCALE))
+    log.info('Max. translation:      +/- {} pixels'.format(MAX_IMAGE_TRANSLATION))
+    log.info('Max. rotation:         +/- {} degrees'.format(MAX_IMAGE_ROTATION))
+    log.info('Max. intensity change: +/- {}'.format(MAX_IMAGE_INTENSITY_MOD))
+    log.info('')
+
     log.info('Data augmentation for training data ...')
     X_train, y_train = add_modified_images(X_train, y_train, n_classes, 700)
     log.info('Data augmentation for validation data ...')
@@ -901,6 +927,14 @@ def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
     Returns:
         None
     """
+    log.info('Hyperparameters for training:')
+    log.info('')
+    log.info('Dropout rate:  {}'.format(1.0 - DROPOUT_KEEP_PROB))
+    log.info('Learning rate: {}'.format(LEARNING_RATE))
+    log.info('Epochs:        {}'.format(EPOCHS))
+    log.info('Batch size:    {}'.format(BATCH_SIZE))
+    log.info('')
+
     # !Warning!
     # Don't reset the graph if loading a saved model.
     # !Warning!
@@ -957,14 +991,14 @@ def train_and_save_model(X_train, y_train, X_valid, y_valid, X_test, y_test, n_c
         log.info('Test Accuracy = {:.3f}'.format(test_accuracy))
 
 
-def main(name):
+def main(name=None):
 
     print('Name: {}'.format(name))
     _, tail = os.path.split(name)
     log_file_base, _ = os.path.splitext(tail)
 
     # Init
-    log = init(log_file_base, logging.INFO)
+    log = init_logging(log_file_base, logging.INFO)
 
     # Disable TensorFlow warnings.
     tf.logging.set_verbosity(tf.logging.ERROR)
